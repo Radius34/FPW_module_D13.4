@@ -146,78 +146,114 @@ app.conf.beat_schedule = {
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 
-
+import logging
+# Настройки логирования
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
-        'verbose': {
-            'format': '{asctime} {levelname} {pathname} {message}',
-            'style': '{',
+        'console_formatter': {
+            'format': '%(asctime)s [%(levelname)s] %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
         },
-        'simple': {
-            'format': '{levelname} {message}',
-            'style': '{',
+        'file_formatter': {
+            'format': '%(asctime)s [%(levelname)s] %(module)s -> %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'error_formatter': {
+            'format': '%(asctime)s [%(levelname)s] %(message)s\n%(pathname)s\n%(exc_info)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'security_formatter': {
+            'format': '%(asctime)s [%(levelname)s] %(module)s -> %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'email_formatter': {
+            'format': '%(asctime)s [%(levelname)s] %(message)s\n%(pathname)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
         },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
+            'formatter': 'console_formatter',
+            'level': 'DEBUG',
+            'filters': ['debug_filter'],
         },
-        'file_general': {
+        'general_file': {
             'class': 'logging.FileHandler',
             'filename': 'general.log',
-            'formatter': 'verbose',
+            'formatter': 'file_formatter',
+            'level': 'INFO',
         },
-        'file_errors': {
+        'errors_file': {
             'class': 'logging.FileHandler',
             'filename': 'errors.log',
-            'formatter': 'verbose',
+            'formatter': 'error_formatter',
             'level': 'ERROR',
+            'filters': ['errors_filter'],
         },
-        'file_security': {
+        'security_file': {
             'class': 'logging.FileHandler',
             'filename': 'security.log',
-            'formatter': 'simple',
+            'formatter': 'security_formatter',
             'level': 'INFO',
+            'filters': ['security_filter'],
         },
         'mail_admins': {
             'class': 'django.utils.log.AdminEmailHandler',
             'level': 'ERROR',
             'include_html': False,
-            'filters': ['require_debug_false'],
+            'formatter': 'email_formatter',
+            'filters': ['email_filter'],
         },
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file_general', 'file_errors', 'file_security', 'mail_admins'],
+            'handlers': ['console', 'general_file'],
             'level': 'DEBUG',
-            'propagate': True,
+        },
+        'django.request': {
+            'handlers': ['mail_admins', 'errors_file'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.server': {
+            'handlers': ['mail_admins', 'errors_file'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.template': {
+            'handlers': ['errors_file'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.db.backends': {
+            'handlers': ['errors_file'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.security': {
+            'handlers': ['security_file'],
+            'level': 'INFO',
+            'propagate': False,
         },
     },
     'filters': {
-        'require_debug_false': {
-            '()': 'django.utils.log.RequireDebugFalse',
-        }
+        'debug_filter': {
+            '()': 'django.utils.log.RequireDebugTrue',
+        },
+        'errors_filter': {
+            '()': 'django.utils.log.CallbackFilter',
+            'callback': lambda record: record.levelno >= logging.ERROR,
+        },
+        'security_filter': {
+            '()': 'django.utils.log.CallbackFilter',
+            'callback': lambda record: 'django.security' in record.name,
+        },
+        'email_filter': {
+            '()': 'django.utils.log.CallbackFilter',
+            'callback': lambda record: ('django.request' in record.name or 'django.server' in record.name) and record.levelno >= logging.ERROR,
+        },
     },
 }
-
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_HOST_USER = 'ruslan@gmail.com'
-EMAIL_HOST_PASSWORD = 'nimda123'
-EMAIL_USE_TLS = True
-DEFAULT_FROM_EMAIL = 'ruslan@gmail.com'
-
-
-import logging
-
-logger = logging.getLogger('django')
-
-logger.debug('Debug message')
-logger.info('Info message')
-logger.warning('Warning message')
-logger.error('Error message')
-logger.critical('Critical message')
